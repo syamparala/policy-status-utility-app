@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway" xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="7d794cdb-c37b-4ebe-89a1-352d1471a7fe" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<http:request-config name="Anypoint_Platform_HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="4fa51be5-4861-41a2-adc8-eaa895c21525" enableCookies="false">
+		<http:request-connection protocol="HTTPS" host="${platform.host}" />
+	</http:request-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="407eca97-b2ab-45a8-95a5-35eacfcd5f92" file="${env}.properties" />
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="08a68667-9037-4b51-8f7b-3a93f02b4eb8" file="${env}.properties" key="${crypto.key}"/>
+	<api-gateway:autodiscovery apiId="${api.id}" ignoreBasePath="true" doc:name="API Autodiscovery" doc:id="4b23e29c-23b9-412d-bf8d-6caebd11ed52" flowRef="policy-status-utility-appFlow" />
+	<sub-flow name="loginSub_Flow_Optional" doc:id="3e2c29ce-0fd8-4b46-8389-81fe4000cc86">
+		<http:request method="POST" doc:name="Login" doc:id="166099c3-b1e5-486d-96ff-4d390e54d386" config-ref="Anypoint_Platform_HTTP_Request_configuration" path="${platform.login.path}">
+			<http:body><![CDATA[#[%dw 2.0
+output application/json
+---
+{
+	username: p('platform.username'),
+	password: p('secure::platform.password')
+}]]]></http:body>
+		</http:request>
+		<ee:transform doc:name="Extract Token" doc:id="8788ee99-a559-4fed-b5e9-000cbb5a7f15">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="authToken"><![CDATA[%dw 2.0
+output application/java
+---
+"Bearer " ++ payload.access_token ]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Login Complete" doc:id="ea7c8896-8970-4bb1-9742-6e50e375c3e1" message="Login Complete" />
+	</sub-flow>
+	<sub-flow name="loginConnectedAppSub_Flow" doc:id="2d38fabe-59f1-4eb3-912a-c961435efe81" >
+		<http:request method="POST" doc:name="Login" doc:id="958ed183-0259-421c-8216-e053336bfcac" config-ref="Anypoint_Platform_HTTP_Request_configuration" path="${platform.connected.app.login.url}" >
+			<http:body ><![CDATA[#[%dw 2.0
+output application/x-www-form-urlencoded
+---
+{
+	client_id: p('platform.connected.app.clientid'),
+	client_secret: p('platform.connected.app.secret'),
+	grant_type: p('platform.connected.app.secret.grant.type')
+	
+}]]]></http:body>
+		</http:request>
+		<ee:transform doc:name="Extract Token" doc:id="4c7cef2e-e05c-441e-aaf4-9e2ffbeccbc6" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="authToken" ><![CDATA[%dw 2.0
+output application/java
+---
+"Bearer " ++ payload.access_token ]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Login Complete" doc:id="76d26621-8579-4a2d-b4fc-a87d6f6b797d" message="Login Complete" />
+	</sub-flow>
+	<flow name="policy-status-utility-appFlow" doc:id="4d8d37cb-f70b-42ff-ac93-51f38fc972f4" >
+		<http:listener doc:name="Listener" doc:id="92d18b03-f0be-479d-9f07-860e63b8dd63" config-ref="HTTP_Listener_config" path="/policies/status"/>
+		<logger level="INFO" doc:name="Request Received" doc:id="aa4d0671-b158-477d-a61f-2c90c98b230a" message="Request to retreive Policies Version Received"/>
+		<ee:transform doc:name="Save Input Params" doc:id="5d03d8a1-e22e-4ea5-b1c0-581330da5c4c">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="platformProperties" ><![CDATA[%dw 2.0
+output application/java
+---
+{
+	orgId: attributes.queryParams.orgId
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<flow-ref doc:name="Login" doc:id="134a332a-c929-4a0c-923c-cbff7a35401a" name="loginConnectedAppSub_Flow"/>
+		<flow-ref doc:name="Retrieve Orgs" doc:id="33bb8253-b7da-4924-a704-a7c00120e0ca" name="retrieveAllOrgsSub_Flow"/>
+		<set-variable value="#[[]]" doc:name="Initialize Aggregated Org Payload" doc:id="f5a2387b-6375-418c-a544-668cb91122b6" variableName="orgAggregatedPayload"/>
+		<foreach doc:name="For Each" doc:id="b27fb5a7-7262-4524-90a6-65ee0714a0fe" collection="#[vars.orgsIds]">
+			<flow-ref doc:name="RetrieveAllEnvironments" doc:id="83a2f8b9-b7c6-4232-8c5c-f2cd619166a5" name="retrieveAllEnvironmentsSub_Flow" />
+			<ee:transform doc:name="Aggregate Org Payload" doc:id="64e5e992-2da3-48f6-88bc-f9190afc3547">
+			<ee:message>
+			</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="orgAggregatedPayload" ><![CDATA[%dw 2.0
+output application/java
+---
+vars.orgAggregatedPayload ++ [payload]]]></ee:set-variable>
+				</ee:variables>
+		</ee:transform>
+		</foreach>
+		<ee:transform doc:name="Build Response" doc:id="df5738a4-c61b-4786-a912-bbca35c2fe15">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json skipNullOn="everywhere"
+---
+vars.orgAggregatedPayload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Request Processed" doc:id="1e519d35-f561-43be-9df0-9dfdbf1aafce" message="Request Processed"/>
+	</flow>
+	<sub-flow name="retrieveAllOrgsSub_Flow" doc:id="c90d7844-0aaa-42cb-b200-88e1f7cb3e67">
+		<http:request method="GET" doc:name="Retreive All Orgs" doc:id="42c216b5-b803-4754-b476-144daa571582" config-ref="Anypoint_Platform_HTTP_Request_configuration" path="${platform.retrieve.orgs.hierarchy}">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : vars.authToken
+}]]]></http:headers>
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	orgId : vars.platformProperties.orgId
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="Build Org Id Array" doc:id="a90d40be-289e-4133-9a9d-3505638d7e71">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="orgsIds"><![CDATA[%dw 2.0
+output application/json
+---
+[payload.id] ++ ((payload.subOrganizations..id) default [])]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+	</sub-flow>
+	<sub-flow name="retrieveAllEnvironmentsSub_Flow" doc:id="d8f35fdc-79da-4797-b7d2-2ea9c0bd9396" >
+		<set-variable value="#[payload]" doc:name="Org Id" doc:id="0a79a232-1dcb-4d32-8d03-813a0960f157" variableName="orgId" />
+		<try doc:name="Try" doc:id="bf26b69d-719a-47f2-9e72-5dcc0ae4ddc3" >
+			<http:request method="GET" doc:name="Retreive All Environments" doc:id="6470627a-8505-4c7f-ad7e-c8c5f6edce3b" config-ref="Anypoint_Platform_HTTP_Request_configuration" path="${platform.retrieve.orgs}">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : vars.authToken
+}]]]></http:headers>
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	orgId : vars.orgId
+}]]]></http:uri-params>
+		</http:request>
+			<error-handler >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="f521d412-7645-473a-b266-4b5c362ec15f" >
+					<ee:transform doc:name="Transform Message" doc:id="dbd80a92-1e71-489e-b3d3-02c65dd6384f" >
+						<ee:message >
+							<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+	errorCode: error.muleMessage.attributes.StatusCode default 500,
+	errorMessage:error.exception.detailMessage
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+				</on-error-continue>
+			</error-handler>
+		</try>
+		<ee:transform doc:name="Initialize Aggregation Variable" doc:id="1bfe6b0f-78bc-4529-bbdc-701103591875" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="aggregatedEnvPayload" ><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+				<ee:set-variable variableName="aggregatedEnvErrorsPayload" ><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="677b28e1-96c9-40b8-af5a-a6578d6b599d" >
+			<when expression='payload.errorCode == null'>
+				<flow-ref doc:name="processAllEnvironmentsSub_Flow" doc:id="c3f5434e-3d2c-41b6-8cfa-a5e09333c0bc" name="processAllEnvironmentsSub_Flow"/>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="93cf3362-ddad-4c57-87db-d2da4b85c305" >
+					<ee:message >
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="aggregatedEnvErrorsPayload" ><![CDATA[%dw 2.0
+output application/java
+---
+vars.aggregatedEnvErrorsPayload ++ [(payload - "Error")]]]></ee:set-variable>
+						<ee:set-variable variableName="envArray" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	orgId: vars.orgId
+}]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<ee:transform doc:name="Build Org Payload" doc:id="7258b8b4-ad93-40b5-8852-45880ef3d1fb">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+vars.envArray - "environments" ++ {environments: vars.aggregatedEnvPayload} ++ {errors: vars.aggregatedEnvErrorsPayload}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Org Retreived" doc:id="cb972538-5a56-4deb-b67a-8fc590a1bfa9" message="Policy information for Org Id: #[payload.orgId] retreived" />
+	</sub-flow>
+	<sub-flow name="processAllEnvironmentsSub_Flow" doc:id="1696eeb4-106c-421b-9ee4-e4b585fe05b4">
+		<ee:transform doc:name="Build Environments Array" doc:id="24f71918-8935-4ac8-8a78-15c83c5648eb">
+			<ee:message>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="envArray" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	orgName: payload.name,
+	orgId: payload.id,
+	isMaster: payload.isMaster,
+	environments: payload.environments map {
+		envId: $.id,
+		name: $.name,
+		orgId: $.organizationId,
+		isProduction: $.isProduction
+	}
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="c6a791b0-8d6b-42f5-b593-e762af0f92c9" collection="vars.envArray.environments">
+			<flow-ref doc:name="Retrieve API in an Env" doc:id="eb2b46b2-33d5-47d2-9733-ad14ecb4da1c" name="retrieveAllApiPerEnvSub_Flow"/>
+			<ee:transform doc:name="Aggregate Env Payloads" doc:id="a669af07-2588-4685-bced-fb20898d89dd" >
+				<ee:message >
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="aggregatedEnvPayload" ><![CDATA[%dw 2.0
+output application/java
+---
+vars.aggregatedEnvPayload ++ [payload]]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</foreach>
+	</sub-flow>
+	<sub-flow name="retrieveAllApiPerEnvSub_Flow" doc:id="4e99451a-31e3-4e5c-b312-e9d93a9e45f2" >
+		<set-variable value="#[payload]" doc:name="Env Details" doc:id="0ab6a94a-78d7-4a9b-b61e-04f0feeff54a" variableName="envDetails"/>
+		<http:request method="GET" doc:name="Retreive All APIs" doc:id="d812b7f7-a135-4139-a686-5cf780d05a05" config-ref="Anypoint_Platform_HTTP_Request_configuration" path="${platform.retreive.apis}">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : vars.authToken
+}]]]></http:headers>
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	envId : vars.envDetails.envId,
+	orgId : vars.envDetails.orgId
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="CleanUp Response" doc:id="68d63a4a-b9e9-418b-987d-1f5e897fde2b">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json  
+---
+flatten(payload.assets map (item, index) -> item.apis map {
+    exchangeAssetName: item.exchangeAssetName,
+    assetId: item.assetId,
+    autoDiscoveryId: $.id,
+    autodiscoveryApiName:item.autodiscoveryApiName,
+    assetId: $.assetId,
+    assetVersion: $.assetVersion,
+    productVersion: $.productVersion,
+    instanceLabel:$.instanceLabel
+  })]]></ee:set-payload>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="aggregatedApiPayload" ><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<foreach doc:name="For Each API Retrieve Applied Policies" doc:id="c972cea2-7314-4552-a0bb-db8d7a486e71" collection="payload">
+			<http:request method="GET" doc:name="Retreive Policies" doc:id="3a9873fb-5e2f-43db-a1cc-f50b5777dc82" config-ref="Anypoint_Platform_HTTP_Request_configuration" path="/apimanager/api/v1/organizations/{orgId}/environments/{envId}/apis/{apiId}/policies" target="policiesResponse">
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : vars.authToken
+}]]]></http:headers>
+				<http:uri-params><![CDATA[#[output application/java
+---
+{
+	envId : vars.envDetails.envId,
+	orgId : vars.envDetails.orgId,
+	apiId : payload.autoDiscoveryId
+}]]]></http:uri-params>
+			</http:request>
+			<logger level="DEBUG" doc:name="Policy Information Retreived" doc:id="27620183-0def-4d8e-8f9c-4b72d5cd7700" message="Policy information for API Id: #[payload.autoDiscoveryId] retreived" />
+			<ee:transform doc:name="Build Policy Information" doc:id="a199d5d5-f98c-41ac-90c5-81d0a70b2b33">
+				<ee:message>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="aggregatedApiPayload" ><![CDATA[%dw 2.0
+output application/java
+---
+vars.aggregatedApiPayload ++ [payload ++ {
+	policies: vars.policiesResponse.policies map {
+		policyName: $.template.assetId,
+		version: $.template.assetVersion
+	}
+}]]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</foreach>
+		<ee:transform doc:name="Build Env Payload" doc:id="988511bf-060b-4d39-846c-3fef439321ce" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+vars.envDetails ++ {apis: vars.aggregatedApiPayload}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Environment Retreived" doc:id="fc26da5b-215a-47d5-aa9e-3e3cc66ba2ed" message="Policy information for Environment Id: #[payload.envId] retreived" />
+	</sub-flow>
+</mule>
