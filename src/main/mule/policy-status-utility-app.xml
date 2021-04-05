@@ -268,8 +268,7 @@ flatten(payload.assets map (item, index) -> item.apis map {
     assetVersion: $.assetVersion,
     productVersion: $.productVersion,
     instanceLabel:$.instanceLabel,
-    isRegistered: if ($.lastActiveDate == null) false else true,
-    deployment: $.deployment
+    isRegistered: if ($.lastActiveDate == null) false else true
   })]]></ee:set-payload>
 			</ee:message>
 			<ee:variables>
