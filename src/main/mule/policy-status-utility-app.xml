@@ -95,7 +95,7 @@ vars.orgAggregatedPayload ++ [payload]]]></ee:set-variable>
 		<ee:transform doc:name="Build Response" doc:id="df5738a4-c61b-4786-a912-bbca35c2fe15">
 			<ee:message>
 				<ee:set-payload><![CDATA[%dw 2.0
-output application/json skipNullOn="everywhere"
+output application/json
 ---
 vars.orgAggregatedPayload]]></ee:set-payload>
 			</ee:message>
@@ -267,7 +267,9 @@ flatten(payload.assets map (item, index) -> item.apis map {
     assetId: $.assetId,
     assetVersion: $.assetVersion,
     productVersion: $.productVersion,
-    instanceLabel:$.instanceLabel
+    instanceLabel:$.instanceLabel,
+    isRegistered: if ($.lastActiveDate == null) false else true,
+    deployment: $.deployment
   })]]></ee:set-payload>
 			</ee:message>
 			<ee:variables>
