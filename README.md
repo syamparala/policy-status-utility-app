@@ -18,6 +18,9 @@ This custom utlity app uses the Platform API's to Login, Retrive Business Group 
     * Connected APP
 
 * Required scopes for the connected app
+
+
+
   ![image](https://user-images.githubusercontent.com/81763961/113581746-2d04a900-95ed-11eb-9843-3777e6bd89c3.png)
 
 * Update the dev.properties file in src/main/resources with appropriate credentials.
